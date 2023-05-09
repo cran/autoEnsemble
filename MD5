@@ -1,0 +1,17 @@
+394659f6e4b52be391ec5a902e00f541 *DESCRIPTION
+0be85954145f3add68a8c94cb8b3a291 *LICENSE
+1a21fb960d66fda347f0c3e0b7b1bd35 *NAMESPACE
+8e93fbdc89a5114f01c996ed99e0331e *R/ensemble.R
+13483ff034e7447108fcde3eb4857c8e *R/evaluate.R
+3040c6c43a77e58ae4adb6498436f9fd *R/h2o.get_ids.R
+00c7387086dbcf2d8495ba4775216829 *R/modelSelection.R
+aba2f776b83b2a1c85f0770780e17bfb *R/stopping_criteria.R
+ccd0bc39460880cb96d6a1311971c329 *README.md
+7b8842ddd049754282dbadd979f4f2c2 *man/ensemble.Rd
+1306666043f4d476f410949ec10caf73 *man/evaluate.Rd
+2e7e9246e8a866fd8c2601347a78a23a *man/figures/logo.PNG
+7bfbc43d73fc3bcd36176f7c568751f7 *man/figures/logo2.PNG
+b0b2ab1dadc802294a7d4d15ea0d3b76 *man/figures/logo3.PNG
+998df2c38c49a2fc73bd940323353336 *man/h2o.get_ids.Rd
+bf8ceb1bea740132ebee6876f5d7ce97 *man/modelSelection.Rd
+307afe8509170e1ea80348574cda67b5 *man/stopping_criteria.Rd
