@@ -1,14 +1,19 @@
-#' @title Builds Stacked Ensemble Model from H2O Models
-#' @description Multiple trained H2O models are stacked to create an ensemble
+#' @title Automatically Trains H2O Models and Builds a Stacked Ensemble Model
+#' @description Automatically trains various algorithms to build base-learners and then
+#'              automatically creates a stacked ensemble model
 #' @importFrom utils setTxtProgressBar txtProgressBar
 #' @importFrom h2o h2o.stackedEnsemble h2o.getModel h2o.auc h2o.aucpr h2o.mcc
-#'             h2o.F2 h2o.mean_per_class_error h2o.giniCoef h2o.accuracy
-# @importFrom h2otools h2o.get_ids
+#'             h2o.F2 h2o.mean_per_class_error h2o.giniCoef h2o.accuracy h2o.automl
+#'             h2o.init h2o.saveModel
 #' @importFrom curl curl
-#' @param models H2O search grid or AutoML grid or a character vector of H2O model IDs.
-#'               the \code{"h2o.get_ids"} function from \code{"h2otools"} can
-#'               retrieve the IDs from grids.
-#' @param training_frame h2o training frame (data.frame) for model training
+#' @param include_algos Vector of character strings naming the algorithms to
+#'                      restrict to during the model-building phase. this argument
+#'                      is passed to autoML.
+#' @param x          Vector. Predictor column names or indices.
+#' @param y          Character. The response column name or index.
+#' @param training_frame An H2OFrame containing the training data.
+#'                   Default is \code{h2o.getFrame("hmda.train.hex")}.
+#' @param validation_frame An H2OFrame for early stopping. Default is \code{NULL}.
 #' @param newdata h2o frame (data.frame). the data.frame must be already uploaded
 #'                on h2o server (cloud). when specified, this dataset will be used
 #'                for evaluating the models. if not specified, model performance
@@ -27,6 +32,7 @@
 #' @param max integer. specifies maximum number of models for each criteria to be extracted. the
 #'            default value is the \code{"top_rank"} percentage for each model selection
 #'            criteria.
+#' @param max_models Maximum number of models to build in the AutoML training (passed to autoML)
 #' @param model_selection_criteria character, specifying the performance metrics that
 #'        should be taken into consideration for model selection. the default are
 #'        \code{"c('auc', 'aucpr', 'mcc', 'f2')"}. other possible criteria are
@@ -34,6 +40,10 @@
 #'        which are also provided by the \code{"evaluate"} function.
 #' @param min_improvement numeric. specifies the minimum improvement in model
 #'                        evaluation metric to qualify further optimization search.
+#' @param max_runtime_secs_per_model Maximum runtime in seconds dedicated to each
+#'                                   individual model training process.
+#' @param max_runtime_secs Integer. This argument specifies the maximum time that
+#'                         the AutoML process will run for in seconds.
 #' @param top_rank numeric vector. specifies percentage of the top models taht
 #'                 should be selected. if the strategy is \code{"search"}, the
 #'                 algorithm searches for the best best combination of the models
@@ -42,13 +52,36 @@
 #'                 (default value is top 1\%).
 #' @param stop_rounds integer. number of stoping rounds, in case the model stops
 #'                    improving
-#' @param reset_stop_rounds logical. if TRUE, every time the model improves the
+#' @param reset_stop_rounds logical. if TRUE, everytime the model improves the
 #'                          stopping rounds penalty is resets to 0.
 #' @param stop_metric character. model stopping metric. the default is \code{"auc"},
 #'                    but \code{"aucpr"} and \code{"mcc"} are also available.
+#' @param nfolds     Integer. Number of folds for cross-validation.
+#'                   Default is 10.
+#' @param balance_classes Logical. Specify whether to oversample the minority
+#'                        classes to balance the class distribution; only applicable to classification
+#' @param save_models Logical. if TRUE, the models trained will be stored locally
+#' @param directory path to a local directory to store the trained models
+#' @param sort_metric Metric to sort the leaderboard by (passed to autoML).
+#'                    For binomial classification
+#'                    choose between "AUC", "AUCPR", "logloss", "mean_per_class_error",
+#'                    "RMSE", "MSE". For regression choose between "mean_residual_deviance",
+#'                    "RMSE", "MSE", "MAE", and "RMSLE". For multinomial classification choose
+#'                    between "mean_per_class_error", "logloss", "RMSE", "MSE". Default is
+#'                    "AUTO". If set to "AUTO", then "AUC" will be used for binomial classification,
+#'                    "mean_per_class_error" for multinomial classification, and
+#'                    "mean_residual_deviance" for regression.
 #' @param seed random seed (recommended)
 #' @param verbatim logical. if TRUE, it reports additional information about the
 #'                 progress of the model training, particularly used for debugging.
+#' @param ignore_config arguments to be passed to h2o.init()
+#' @param bind_to_localhost arguments to be passed to h2o.init()
+#' @param insecure arguments to be passed to h2o.init()
+#' @param nthreads arguments to be passed to h2o.init()
+#' @param max_mem_size arguments to be passed to h2o.init()
+#' @param min_mem_size arguments to be passed to h2o.init()
+#' @param startH2O Logical. if TRUE, h2o server will be initiated.
+#' @param ... parameters to be passed to autoML algorithm in h2o package
 #' @return a list including the ensemble model and the top-rank models that were
 #'         used in the model
 #' @author E. F. Haghish
@@ -120,8 +153,29 @@
 #' }
 #' @export
 
-ensemble <- function(models,
+autoEnsemble <- function(
+                     #automl arguments
+                     #----------------
+                     x, #NEW
+                     y, #NEW
                      training_frame,
+                     validation_frame = NULL, #NEW
+                     nfolds = 10, #NEW
+                     balance_classes = TRUE, #NEW
+                     max_runtime_secs = NULL,
+                     max_runtime_secs_per_model = NULL,
+                     max_models = NULL,
+                     sort_metric = "AUCPR",
+                     include_algos = c("GLM", "DeepLearning", "DRF", "XGBoost", "GBM"),
+                     #in future updates, add "StackedEnsemble" to create ensembles with different strategies and
+                     #choose the best-performing one. For imbalanced data, however, the autoEnsemble is expected
+                     #to outperform other strategies such as best of families and best models.
+                     save_models = FALSE,
+                     directory = paste("autoEnsemble", format(Sys.time(), "%d-%m-%y-%H:%M")),
+                     ...,
+
+                     # ensemble arguments
+                     # ------------------
                      newdata = NULL,
                      family = "binary",
                      strategy = c("search"),
@@ -133,149 +187,89 @@ ensemble <- function(models,
                      reset_stop_rounds = TRUE,
                      stop_metric = "auc",
                      seed = -1,
-                     verbatim = FALSE
+                     verbatim = FALSE,
                      #loaded = TRUE,
                      #path = NULL
+
+                     # initiate h2o server
+                     # -------------------
+                     startH2O = FALSE,
+                     nthreads = NULL,
+                     max_mem_size = NULL,
+                     min_mem_size = NULL,
+                     ignore_config = FALSE,
+                     bind_to_localhost = FALSE,
+                     insecure = TRUE
                      ) {
 
-  modelTOP  <- NULL
-  modelSTOP <- NULL
-  top_rank_id <- NULL
-
-  if (family != "binary") stop("currently only 'binary' classification models are supported")
-
-  # STEP 0: prepare the models
+  # STEP 0: Initiate h2o server
   # ============================================================
-  if (inherits(models,"H2OAutoML") | inherits(models,"H2OGrid")) {
-    ids <- h2o.get_ids(models)
-  }
-  else if (inherits(models,"character")) {
-    ids <- models
+  if (startH2O) h2o.init(nthreads = nthreads,
+                         ignore_config = ignore_config,
+                         max_mem_size = max_mem_size,
+                         min_mem_size = min_mem_size,
+                         bind_to_localhost = bind_to_localhost,
+                         insecure = insecure)
 
-    # # if the models are not uploaded to H2O cloud, do so
-    # if (!loaded) {
-    #   for (i in ids) h2o::h2o.loadModel(paste0(path, i))
-    # }
-  }
+  Sys.sleep(5)
 
-  # get the models' parameters from trained models:
-  params <- h2o::h2o.getModel(ids[1])
-  #nfolds <- params@parameters$nfolds
-  x      <- params@parameters$x
-  y      <- params@parameters$y
-
-  # STEP 1: Evaluate the models for various criteria
+  # STEP 1: train the models
   # ============================================================
-  modelEval <- evaluate(id = ids, newdata = newdata)
-  if (verbatim) message("\nmodels were successfully evaluated")
+  models <- h2o.automl(x=x,
+                       y=y,
+                       training_frame=training_frame,
+                       validation_frame=validation_frame,
+                       nfolds=nfolds,
+                       balance_classes = balance_classes,
+                       max_runtime_secs = max_runtime_secs,
+                       max_runtime_secs_per_model = max_runtime_secs_per_model,
+                       max_models = max_models,
+                       sort_metric=sort_metric,
+                       include_algos = include_algos,
+                       project_name = "autoEnsemble",
+                       seed = seed,
+                       verbosity = verbatim,
+                       keep_cross_validation_predictions = TRUE,
+                       ... )
 
-  # STEP 2: Apply model selection criteria (TOP)
+  # STEP 2: build the autoEnsemble stacked ensemble
   # ============================================================
-  if ("top" %in% strategy) {
-    top_rank_id <- modelSelection(eval = modelEval,
-                               max = max,
-                               top_rank = top_rank[1],
-                               model_selection_criteria = model_selection_criteria)
+  ids    <- h2o.get_ids(models)
+  ens    <- ensemble(models = ids,
+                     training_frame = training_frame,
+                     strategy = strategy,
+                     newdata = newdata,
+                     family = family,
+                     model_selection_criteria = model_selection_criteria,
+                     min_improvement = min_improvement,
+                     max = max,
+                     top_rank = top_rank,
+                     stop_rounds = stop_rounds,
+                     reset_stop_rounds = reset_stop_rounds,
+                     stop_metric = stop_metric,
+                     verbatim = verbatim,
+                     seed = seed)
 
+  class(ens) <- c("autoEnsemble", "list")
 
-    # train the ensemble
-    # ----------------------------------------------------------
-    model <- h2o.stackedEnsemble(x = x,
-                                 y = y,
-                                 training_frame = training_frame,
-                                 model_id = "top",
-                                 base_models = top_rank_id,
-                                 seed = seed)
-
-    if (verbatim) message("'top' strategy was successfully evaluated")
-  }
-
-  # STEP 3: Apply model selection criteria (SEARCH)
+  # STEP 3: store the models
   # ============================================================
-  if ("search" %in% strategy) {
-    # NOTE: allow building a meta learner with a single model, ensuring that adding
-    #       more models to the ensemble does not reduce the performance of the model!
-    #       thus, N is set to 0, that is, any N value above 0 is acceptable
-    N     <- 0 #number of selected models at each search round
-    STOP  <- 0 #current number of stopping criteria
-    df    <- NULL
-    auc   <- NULL
-    aucpr <- NULL
-    mcc   <- NULL
-    round <- 0
+  if (save_models) {
 
-    if (verbatim) message("'search' strategy tuning:")
+    dir.create(directory)
+    dir.create(paste0(directory,"/baselearners"))
+    dir.create(paste0(directory,"/autoEnsemble"))
 
-    for (i in top_rank) {
-      if (STOP <= stop_rounds) {
-        select <- modelSelection(eval = modelEval,
-                                   max = max,
-                                   top_rank = i,
-                                   model_selection_criteria = model_selection_criteria)
-
-        # if the number of models has increased, proceed
-        # ============================================================
-        if (length(select) > N) {
-          N <- length(select)   #memorize the number of selected models
-          round <- round + 1    #memorize the current round of adding models
-
-          # train the ensemble and evaluate it
-          stopModel <- h2o.stackedEnsemble(x = x,
-                                           y = y,
-                                           training_frame = training_frame,
-                                           model_id = paste0("stop_",i),
-                                           base_models = select,
-                                           seed = seed)
-
-          # prepare the evaluation data.frame
-          # ----------------------------------------------------------
-          for (j in stop_metric) {
-            if ("auc" %in% stop_metric)     auc <- as.numeric(h2o::h2o.auc(stopModel))
-            if ("aucpr" %in% stop_metric) aucpr <- as.numeric(h2o::h2o.aucpr(stopModel))
-            if ("mcc" %in% stop_metric)     mcc <- max(h2o::h2o.mcc(stopModel)[,2])
-
-            #sort(c("auc","aucpr","mcc"))
-            temp <- data.frame(metric = sort(stop_metric),
-                               round = rep(round, length(stop_metric)),
-                               val = c(auc, aucpr, mcc))
-            df <- rbind(df, temp)
-          }
-
-          # evaluate the stopping criteria from the second round forth
-          # ----------------------------------------------------------
-          if (round > 1) {
-            sc <- stopping_criteria(df = df,
-                                    round = round,
-                                    stop = STOP,
-                                    min_improvement = min_improvement,
-                                    stop_rounds = stop_rounds,
-                                    reset_stop_rounds = reset_stop_rounds,
-                                    stop_metric = stop_metric)
-
-            STOP <- sc$current_stop_round
-
-            if (sc$improved) {
-              model <- stopModel
-              top_rank_id <- select
-            }
-          }
-          else {
-            model <- stopModel #update the model on the first round
-            top_rank_id <- select
-          }
-
-        }
-      }
-      else break
+    for (i in ids) {
+      h2o.saveModel(h2o.getModel(i), path = paste0(directory,"/baselearners"), force = T, export_cross_validation_predictions = T)
     }
+
+    h2o.saveModel(ens$model, path = paste0(directory,"/autoEnsemble"), force = T, export_cross_validation_predictions = T)
   }
 
-  obj <- list(model = model,
-              top_rank_id = top_rank_id)
+  # STEP 4: return the stacked ensemble model
+  # ============================================================
+  return(ens)
 
-  class(obj) <- c("autoEnsemble", "list")
-
-  return(obj)
 }
-
 

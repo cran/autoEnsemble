@@ -1,29 +1,23 @@
 Package: autoEnsemble
 Type: Package
 Title: Automated Stacked Ensemble Classifier for Severe Class Imbalance
-Version: 0.2
+Version: 0.3
 Authors@R: 
     person("E. F. Haghish",
            role = c("aut", "cre", "cph"),
-           email = "haghish@uio.no")
+           email = "haghish@hotmail.com")
 Depends: R (>= 3.5.0),
-Description: An AutoML algorithm is developed to construct homogeneous or 
-             heterogeneous stacked ensemble models using specified base-learners. 
-             Various criteria are employed to identify optimal models, enhancing 
-             diversity among them and resulting in more robust stacked ensembles. 
-             The algorithm optimizes the model by incorporating an increasing 
-             number of top-performing models to create a diverse combination. 
-             Presently, only models from 'h2o.ai' are supported.
+Description: A stacking solution for modeling imbalanced and severely skewed data. It automates the process of building homogeneous or heterogeneous stacked ensemble models by selecting "best" models according to different criteria. In doing so, it strategically searches for and selects diverse, high-performing base-learners to construct ensemble models optimized for skewed data. This package is particularly useful for addressing class imbalance in datasets, ensuring robust and effective model outcomes through advanced ensemble strategies which aim to stabilize the model, reduce its overfitting, and further improve its generalizability.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Imports: h2o (>= 3.34.0.0), h2otools (>= 0.3), curl (>= 4.3.0)
-RoxygenNote: 7.2.1
+RoxygenNote: 7.3.2
 URL: https://github.com/haghish/autoEnsemble,
         https://www.sv.uio.no/psi/english/people/academic/haghish/
 BugReports: https://github.com/haghish/autoEnsemble/issues
 NeedsCompilation: no
-Packaged: 2023-05-08 21:38:36 UTC; U-Shaped-Valley
+Packaged: 2025-03-20 09:48:25 UTC; haghish
 Author: E. F. Haghish [aut, cre, cph]
-Maintainer: E. F. Haghish <haghish@uio.no>
+Maintainer: E. F. Haghish <haghish@hotmail.com>
 Repository: CRAN
-Date/Publication: 2023-05-09 09:30:02 UTC
+Date/Publication: 2025-03-20 11:50:13 UTC

@@ -1,14 +1,16 @@
-<a href="https://github.com/haghish/autoEnsemble"><img src='man/figures/logo.PNG' align="right" height="200" /></a>
+<a href="https://github.com/haghish/autoEnsemble"><img src='man/figures/logo_noname.png' align="right" height="200" /></a>
   
   `autoEnsemble` : An AutoML Algorithm for Building Homogeneous and Heterogeneous Stacked Ensemble Models by Searching for Diverse Base-Learners
 ==========================================================================================================================================
+
+[![CRAN version](https://www.r-pkg.org/badges/version/autoEnsemble?color=f29e02)](https://cran.r-project.org/package=autoEnsemble)  [![](https://cranlogs.r-pkg.org/badges/grand-total/autoEnsemble?color=f2c602)](https://cran.r-project.org/package=autoEnsemble) [![](man/figures/manual.svg)](https://CRAN.R-project.org/package=autoEnsemble)
 
 The `autoEnsemble` R package present an AutoML algorithm for building stacked ensemble of classifiers, that are particularly powerful for severely imbalanced outcomes. Building a successfult stacked ensemble models is based on two principles:
   
 1. The base-learners are more accurate than a chance prediction. The more accurate the base-learners, the stronger the stacked ensemble
 2. The base-learners are diverse, i.e., their error is not correlated. 
 
-While the first principle is easy to assess with straight-forward model evaluation criteria, searching for _diverse excellent models_ is not that easy, particularly under severe class imbalance problem. The **`autoEnsemble`** R package implements an auomated machine learning algorithm that identifies excellent - yet destinct - models and stacks them to build an excellent stacked ensemble model. Currently, 2 strategies are programmed, __top__ and __search__:
+While the first principle is easy to assess with straight-forward model evaluation criteria, searching for _diverse excellent models_ is not that easy, particularly under severe class imbalance problem. The **`autoEnsemble`** R package implements an automated machine learning algorithm that identifies excellent - yet destinct - models and stacks them to build an excellent stacked ensemble model. Currently, 2 strategies are programmed, __top__ and __search__:
 
 Strategy    | Description
 ----------- | -----------
@@ -78,8 +80,8 @@ search <- ensemble(models = ids, training_frame = prostate, strategy = "search")
 #######################################################
 h2o.auc(aml@leader)                          # best model identified by h2o.automl
 h2o.auc(h2o.getModel(grid@model_ids[[1]]))   # best model identified by grid search
-h2o.auc(top)                                 # ensemble model with 'top' strategy
-h2o.auc(search)                              # ensemble model with 'search' strategy
+h2o.auc(top$model)                           # ensemble model with 'top' strategy
+h2o.auc(search$model)                        # ensemble model with 'search' strategy
 
-# > both 'top' and 'search' strategies had identical results, but out perform the grid search and AutoML search. Yet, this was a small dataset, and a quick test... 
+# > both 'top' and 'search' strategies had identical results, but outperform the grid search and AutoML search. Yet, this was a small dataset, and a quick test... 
 ```
